@@ -7,7 +7,8 @@ from PySide6.QtCore import Qt, QThread, Signal, Slot, QSize, QTimer
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QLabel, QComboBox, QProgressBar,
-    QFileDialog, QScrollArea, QFrame, QSpinBox, QCheckBox, QMessageBox
+    QFileDialog, QScrollArea, QFrame, QSpinBox, QCheckBox, QMessageBox,
+    QGraphicsDropShadowEffect
 )
 from PySide6.QtGui import QPixmap, QColor, QFont, QClipboard
 import yt_dlp
@@ -38,6 +39,14 @@ def format_eta(eta_secs):
     if h > 0:
         return f"{h:d}:{m:02d}:{s:02d}"
     return f"{m:02d}:{s:02d}"
+
+def apply_glow(widget, color=QColor(163, 230, 53, 130), blur=28, x=0, y=6):
+    """위젯에 은은한 네온 글로우 그림자를 적용합니다."""
+    effect = QGraphicsDropShadowEffect(widget)
+    effect.setBlurRadius(blur)
+    effect.setOffset(x, y)
+    effect.setColor(color)
+    widget.setGraphicsEffect(effect)
 
 
 # ------------------------------------------------------------------------
@@ -167,13 +176,19 @@ class TaskCard(QFrame):
 
     def init_ui(self, thumbnail_url):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(4, 12, 14, 12)
         layout.setSpacing(15)
+
+        # 상태 표시용 좌측 액센트 바
+        self.accent_bar = QFrame()
+        self.accent_bar.setFixedWidth(4)
+        self.accent_bar.setStyleSheet("background-color: #f97316; border-radius: 2px;")
+        layout.addWidget(self.accent_bar)
 
         # 썸네일 이미지 라벨
         self.lbl_thumb = QLabel()
-        self.lbl_thumb.setFixedSize(80, 45)
-        self.lbl_thumb.setStyleSheet("background-color: #2b2b2b; border-radius: 4px;")
+        self.lbl_thumb.setFixedSize(84, 47)
+        self.lbl_thumb.setStyleSheet("background-color: #23262f; border-radius: 6px; color: #6b7280; font-size: 10px;")
         self.lbl_thumb.setAlignment(Qt.AlignCenter)
         self.lbl_thumb.setText("No Image")
         layout.addWidget(self.lbl_thumb)
@@ -189,7 +204,7 @@ class TaskCard(QFrame):
 
         # 제목
         self.lbl_title = QLabel(self.title)
-        self.lbl_title.setStyleSheet("font-weight: bold; font-size: 13px; color: #ffffff;")
+        self.lbl_title.setStyleSheet("font-weight: 700; font-size: 13px; color: #f5f6fa;")
         self.lbl_title.setWordWrap(False)
         info_layout.addWidget(self.lbl_title)
 
@@ -201,14 +216,14 @@ class TaskCard(QFrame):
         progress_layout.addWidget(self.progress_bar)
 
         self.lbl_percent = QLabel("0%")
-        self.lbl_percent.setStyleSheet("font-size: 11px; font-weight: bold; min-width: 35px;")
+        self.lbl_percent.setStyleSheet("font-size: 11px; font-weight: 700; min-width: 38px; color: #fb923c;")
         self.lbl_percent.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         progress_layout.addWidget(self.lbl_percent)
         info_layout.addLayout(progress_layout)
 
         # 상태 텍스트
         self.lbl_status = QLabel("대기 중...")
-        self.lbl_status.setStyleSheet("font-size: 11px; color: #aaaaaa;")
+        self.lbl_status.setStyleSheet("font-size: 11px; color: #8b90a0;")
         info_layout.addWidget(self.lbl_status)
 
         layout.addLayout(info_layout, stretch=1)
@@ -226,6 +241,8 @@ class TaskCard(QFrame):
         self.btn_open_folder.setVisible(False)
         self.btn_open_folder.clicked.connect(self.on_open_folder_clicked)
         layout.addWidget(self.btn_open_folder)
+
+        apply_glow(self, color=QColor(0, 0, 0, 110), blur=18, y=4)
 
     @Slot(bytes)
     def set_thumbnail(self, data):
@@ -265,7 +282,8 @@ class TaskCard(QFrame):
         self.progress_bar.setValue(100)
         self.lbl_percent.setText("100%")
         self.lbl_status.setText("다운로드 완료")
-        self.lbl_status.setStyleSheet("font-size: 11px; color: #4CAF50; font-weight: bold;")
+        self.lbl_status.setStyleSheet("font-size: 11px; color: #22c55e; font-weight: 700;")
+        self.accent_bar.setStyleSheet("background-color: #22c55e; border-radius: 2px;")
         self.btn_action.setText("삭제")
         self.btn_open_folder.setVisible(True)
 
@@ -273,9 +291,11 @@ class TaskCard(QFrame):
         self.status = "실패"
         self.lbl_status.setText(err_msg)
         if "취소" in err_msg:
-            self.lbl_status.setStyleSheet("font-size: 11px; color: #aaaaaa;")
+            self.lbl_status.setStyleSheet("font-size: 11px; color: #8b90a0;")
+            self.accent_bar.setStyleSheet("background-color: #4b5563; border-radius: 2px;")
         else:
-            self.lbl_status.setStyleSheet("font-size: 11px; color: #f44336; font-weight: bold;")
+            self.lbl_status.setStyleSheet("font-size: 11px; color: #ef4444; font-weight: 700;")
+            self.accent_bar.setStyleSheet("background-color: #ef4444; border-radius: 2px;")
         self.btn_action.setText("삭제")
 
     def on_action_clicked(self):
@@ -341,6 +361,33 @@ class MainWindow(QMainWindow):
 
         self.ffmpeg_installed = False
 
+    def build_stat_chip(self, caption, accent_color):
+        """대시보드 스타일 통계 카드(칩) 하나를 만들어 (프레임, 숫자라벨) 튜플로 반환합니다."""
+        frame = QFrame()
+        frame.setStyleSheet(
+            f"background-color: #171922; border: 1px solid #2a2d3a; "
+            f"border-left: 3px solid {accent_color}; border-radius: 10px;"
+        )
+        v = QVBoxLayout(frame)
+        v.setContentsMargins(14, 10, 14, 10)
+        v.setSpacing(2)
+        lbl_number = QLabel("0")
+        lbl_number.setStyleSheet(f"font-size: 22px; font-weight: 800; color: {accent_color};")
+        lbl_caption = QLabel(caption)
+        lbl_caption.setStyleSheet("font-size: 11px; color: #8b90a0;")
+        v.addWidget(lbl_number)
+        v.addWidget(lbl_caption)
+        return frame, lbl_number
+
+    def update_stats(self):
+        """통계 카드의 숫자를 현재 tasks 상태에 맞춰 갱신합니다."""
+        total = len(self.tasks)
+        active = sum(1 for t in self.tasks.values() if t['status'] == "다운로드 중")
+        done = sum(1 for t in self.tasks.values() if t['status'] == "완료")
+        self.lbl_stat_total.setText(str(total))
+        self.lbl_stat_active.setText(str(active))
+        self.lbl_stat_done.setText(str(done))
+
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -349,14 +396,49 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(15)
 
         # ---------------- 헤더 영역 ----------------
-        header_layout = QVBoxLayout()
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(14)
+
+        lbl_icon = QLabel("▶")
+        lbl_icon.setFixedSize(42, 42)
+        lbl_icon.setAlignment(Qt.AlignCenter)
+        lbl_icon.setStyleSheet(
+            "background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            "stop:0 #a3e635, stop:1 #f97316); "
+            "border-radius: 12px; color: #0f1115; font-size: 18px; font-weight: bold;"
+        )
+        apply_glow(lbl_icon, color=QColor(163, 230, 53, 170), blur=32, y=0)
+        header_layout.addWidget(lbl_icon)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(2)
         lbl_title = QLabel("한글 유튜브 다운로더")
-        lbl_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #2196F3;")
-        lbl_sub = QLabel("Hitomi-Downloader 스타일의 고성능 멀티스레드 유튜브 다운로더")
-        lbl_sub.setStyleSheet("font-size: 11px; color: #888888;")
-        header_layout.addWidget(lbl_title)
-        header_layout.addWidget(lbl_sub)
+        lbl_title.setStyleSheet("font-size: 21px; font-weight: 800; color: #f5f6fa; letter-spacing: 0.3px;")
+        lbl_sub = QLabel("Hitomi-Downloader 스타일 · 고성능 멀티스레드 다운로더")
+        lbl_sub.setStyleSheet("font-size: 11px; color: #8b90a0;")
+        title_box.addWidget(lbl_title)
+        title_box.addWidget(lbl_sub)
+        header_layout.addLayout(title_box)
+
+        badge_pro = QLabel("PRO")
+        badge_pro.setStyleSheet(
+            "background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #a3e635, stop:1 #f97316);"
+            "color: #0f1115; font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 9px;"
+        )
+        badge_pro.setAlignment(Qt.AlignCenter)
+        header_layout.addWidget(badge_pro, alignment=Qt.AlignVCenter)
+
+        header_layout.addStretch(1)
         main_layout.addLayout(header_layout)
+
+        # 헤더 하단 네온 그라데이션 언더라인
+        header_underline = QFrame()
+        header_underline.setFixedHeight(2)
+        header_underline.setStyleSheet(
+            "background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+            "stop:0 #a3e635, stop:0.5 #f97316, stop:1 rgba(249, 115, 22, 0));"
+        )
+        main_layout.addWidget(header_underline)
 
         # ---------------- URL 입력 영역 ----------------
         input_layout = QHBoxLayout()
@@ -370,19 +452,21 @@ class MainWindow(QMainWindow):
         self.btn_add.setFixedHeight(40)
         self.btn_add.setFixedWidth(80)
         self.btn_add.clicked.connect(self.on_add_clicked)
+        apply_glow(self.btn_add, color=QColor(249, 115, 22, 140), blur=24, y=4)
         input_layout.addWidget(self.btn_add)
         main_layout.addLayout(input_layout)
 
         # ---------------- 설정 영역 ----------------
         settings_frame = QFrame()
-        settings_frame.setStyleSheet("background-color: #1a1a1a; border: 1px solid #2d2d2d; border-radius: 8px;")
+        settings_frame.setStyleSheet("background-color: #171922; border: 1px solid #2a2d3a; border-radius: 10px;")
+        apply_glow(settings_frame, color=QColor(0, 0, 0, 140), blur=20, y=6)
         settings_layout = QVBoxLayout(settings_frame)
         settings_layout.setContentsMargins(15, 12, 15, 12)
         settings_layout.setSpacing(10)
 
         # 1행: 저장 경로
         path_layout = QHBoxLayout()
-        lbl_path_title = QLabel("저장 위치:")
+        lbl_path_title = QLabel("📁 저장 위치:")
         lbl_path_title.setStyleSheet("font-weight: bold;")
         path_layout.addWidget(lbl_path_title)
 
@@ -400,20 +484,20 @@ class MainWindow(QMainWindow):
         options_layout = QHBoxLayout()
         
         # 포맷 선택
-        options_layout.addWidget(QLabel("포맷:"))
+        options_layout.addWidget(QLabel("🎞  포맷:"))
         self.cmb_format = QComboBox()
         self.cmb_format.addItems(["비디오 (MP4)", "오디오 (MP3)"])
         self.cmb_format.currentTextChanged.connect(self.on_format_changed)
         options_layout.addWidget(self.cmb_format)
 
         # 화질 선택
-        options_layout.addWidget(QLabel("화질/음질:"))
+        options_layout.addWidget(QLabel("🎚  화질/음질:"))
         self.cmb_quality = QComboBox()
         options_layout.addWidget(self.cmb_quality)
         self.update_quality_combobox("비디오 (MP4)")
 
         # 동시 다운로드 개수
-        options_layout.addWidget(QLabel("동시 다운로드 제한:"))
+        options_layout.addWidget(QLabel("🔀  동시 다운로드 제한:"))
         self.spin_concurrency = QSpinBox()
         self.spin_concurrency.setRange(1, 10)
         self.spin_concurrency.setValue(3)
@@ -421,7 +505,7 @@ class MainWindow(QMainWindow):
         options_layout.addWidget(self.spin_concurrency)
 
         # 클립보드 감지 체크박스
-        self.chk_clipboard = QCheckBox("클립보드 감지")
+        self.chk_clipboard = QCheckBox("📋 클립보드 감지")
         self.chk_clipboard.setChecked(True)
         options_layout.addWidget(self.chk_clipboard)
 
@@ -430,16 +514,27 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(settings_frame)
 
+        # ---------------- 통계 카드 영역 (대시보드 스타일) ----------------
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(10)
+        chip_total, self.lbl_stat_total = self.build_stat_chip("📦 총 작업", "#e6e8ee")
+        chip_active, self.lbl_stat_active = self.build_stat_chip("⚡ 다운로드 중", "#f97316")
+        chip_done, self.lbl_stat_done = self.build_stat_chip("✅ 완료", "#a3e635")
+        stats_layout.addWidget(chip_total)
+        stats_layout.addWidget(chip_active)
+        stats_layout.addWidget(chip_done)
+        main_layout.addLayout(stats_layout)
+
         # FFMPEG 경고문 (미설치 시만 노출)
         if not self.ffmpeg_installed:
             lbl_warning = QLabel("⚠ 시스템에 FFmpeg가 감지되지 않았습니다. 화질 다운그레이드 혹은 오디오 추출에 실패할 수 있습니다.")
-            lbl_warning.setStyleSheet("color: #ff9800; font-size: 11px; font-weight: bold;")
+            lbl_warning.setStyleSheet("color: #f59e0b; font-size: 11px; font-weight: 700;")
             main_layout.addWidget(lbl_warning)
 
         # ---------------- 작업 목록 영역 ----------------
         list_header_layout = QHBoxLayout()
-        self.lbl_list_count = QLabel("작업 목록 (0)")
-        self.lbl_list_count.setStyleSheet("font-weight: bold; font-size: 13px; color: #ffffff;")
+        self.lbl_list_count = QLabel("📥 작업 목록 (0)")
+        self.lbl_list_count.setStyleSheet("font-weight: 700; font-size: 13px; color: #f5f6fa;")
         list_header_layout.addWidget(self.lbl_list_count)
         list_header_layout.addStretch(1)
         
@@ -453,7 +548,7 @@ class MainWindow(QMainWindow):
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_widget = QWidget()
-        self.scroll_widget.setStyleSheet("background-color: #121212;")
+        self.scroll_widget.setStyleSheet("background-color: #0f1115;")
         self.task_list_layout = QVBoxLayout(self.scroll_widget)
         self.task_list_layout.setContentsMargins(0, 0, 0, 0)
         self.task_list_layout.setSpacing(8)
@@ -463,109 +558,150 @@ class MainWindow(QMainWindow):
 
         # ---------------- 하단 상태 바 ----------------
         self.lbl_footer_status = QLabel("준비 완료")
-        self.lbl_footer_status.setStyleSheet("font-size: 11px; color: #888888; padding: 2px;")
+        self.lbl_footer_status.setStyleSheet("font-size: 11px; color: #8b90a0; padding: 2px;")
         main_layout.addWidget(self.lbl_footer_status)
 
     def init_stylesheet(self):
         qss = """
         QMainWindow {
-            background-color: #121212;
+            background-color: #0f1115;
         }
         QWidget {
-            color: #e0e0e0;
+            color: #e6e8ee;
             font-family: 'Malgun Gothic', 'Segoe UI', Arial, sans-serif;
             font-size: 13px;
         }
         QLineEdit {
-            background-color: #1e1e1e;
-            border: 1px solid #2d2d2d;
-            border-radius: 6px;
+            background-color: #191b22;
+            border: 1px solid #2a2d3a;
+            border-radius: 8px;
             padding: 8px 12px;
-            color: #ffffff;
+            color: #f5f6fa;
         }
         QLineEdit:focus {
-            border: 1px solid #2196F3;
+            border: 1px solid #a3e635;
         }
         QComboBox {
-            background-color: #1e1e1e;
-            border: 1px solid #2d2d2d;
-            border-radius: 6px;
+            background-color: #191b22;
+            border: 1px solid #2a2d3a;
+            border-radius: 8px;
             padding: 6px 12px;
-            color: #ffffff;
+            color: #f5f6fa;
+        }
+        QComboBox:hover {
+            border: 1px solid #3a3f52;
         }
         QComboBox::drop-down {
             border: 0px;
         }
         QComboBox QAbstractItemView {
-            background-color: #1e1e1e;
-            border: 1px solid #2d2d2d;
-            selection-background-color: #2196F3;
-            selection-color: #ffffff;
+            background-color: #191b22;
+            border: 1px solid #2a2d3a;
+            selection-background-color: #f97316;
+            selection-color: #0f1115;
+            outline: none;
         }
         QSpinBox {
-            background-color: #1e1e1e;
-            border: 1px solid #2d2d2d;
-            border-radius: 6px;
+            background-color: #191b22;
+            border: 1px solid #2a2d3a;
+            border-radius: 8px;
             padding: 5px;
-            color: #ffffff;
+            color: #f5f6fa;
         }
         QCheckBox {
-            color: #aaaaaa;
+            color: #8b90a0;
+            spacing: 6px;
         }
         QCheckBox::indicator {
             width: 14px;
             height: 14px;
+            border-radius: 4px;
+            border: 1px solid #3a3f52;
+            background-color: #191b22;
+        }
+        QCheckBox::indicator:checked {
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #a3e635, stop:1 #f97316);
+            border: 1px solid #f97316;
         }
         QPushButton {
-            background-color: #2196F3;
-            color: #ffffff;
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #a3e635, stop:1 #f97316);
+            color: #0f1115;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             padding: 8px 16px;
-            font-weight: bold;
+            font-weight: 800;
         }
         QPushButton:hover {
-            background-color: #1976D2;
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #bef264, stop:1 #fdba74);
         }
         QPushButton:pressed {
-            background-color: #0D47A1;
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #65a30d, stop:1 #c2410c);
+            color: #ffffff;
+        }
+        QPushButton:disabled {
+            background-color: #2a2d3a;
+            color: #6b7280;
         }
         QPushButton#actionButton {
-            background-color: #222222;
-            border: 1px solid #333333;
-            color: #dddddd;
-            border-radius: 4px;
-            font-weight: normal;
+            background-color: #1a1c24;
+            border: 1px solid #2a2d3a;
+            color: #c9cdd8;
+            border-radius: 6px;
+            font-weight: 500;
+            padding: 6px 12px;
         }
         QPushButton#actionButton:hover {
-            background-color: #333333;
-            border: 1px solid #444444;
+            background-color: #23262f;
+            border: 1px solid #3a3f52;
+            color: #f5f6fa;
         }
         QScrollArea {
-            border: 1px solid #2d2d2d;
-            border-radius: 8px;
-            background-color: #121212;
+            border: 1px solid #2a2d3a;
+            border-radius: 10px;
+            background-color: #0f1115;
+        }
+        QScrollBar:vertical {
+            background: transparent;
+            width: 10px;
+            margin: 4px 2px 4px 0px;
+        }
+        QScrollBar::handle:vertical {
+            background: #2a2d3a;
+            border-radius: 5px;
+            min-height: 30px;
+        }
+        QScrollBar::handle:vertical:hover {
+            background: #3a3f52;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+            background: none;
         }
         QFrame#TaskCard {
-            background-color: #1a1a1a;
-            border: 1px solid #2d2d2d;
-            border-radius: 8px;
+            background-color: #1a1c24;
+            border: 1px solid #2a2d3a;
+            border-radius: 10px;
         }
         QFrame#TaskCard:hover {
-            border: 1px solid #333333;
-            background-color: #202020;
+            border: 1px solid #3a3f52;
+            background-color: #1e2029;
         }
         QProgressBar {
-            background-color: #2b2b2b;
+            background-color: #23262f;
             border: none;
-            border-radius: 3px;
+            border-radius: 4px;
             text-align: right;
             color: transparent;
-            height: 6px;
+            height: 8px;
         }
         QProgressBar::chunk {
-            background-color: #2196F3;
-            border-radius: 3px;
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #a3e635, stop:1 #f97316);
+            border-radius: 4px;
+        }
+        QMessageBox {
+            background-color: #171922;
         }
         """
         self.setStyleSheet(qss)
@@ -709,6 +845,7 @@ class MainWindow(QMainWindow):
 
         self.task_queue.append(task_id)
         self.update_list_count()
+        self.update_stats()
         self.process_queue()
 
     def process_queue(self):
@@ -732,6 +869,7 @@ class MainWindow(QMainWindow):
         task = self.tasks[task_id]
         task['status'] = "다운로드 중"
         self.active_tasks_count += 1
+        self.update_stats()
 
         # yt-dlp 옵션 구성
         ydl_opts = self.build_ydl_opts(task['format'], task['quality'], task['save_dir'])
@@ -822,6 +960,7 @@ class MainWindow(QMainWindow):
 
         self.active_tasks_count -= 1
         self.lbl_footer_status.setText(f"'{task['title']}' 다운로드가 완료되었습니다.")
+        self.update_stats()
         
         # 큐 재처리
         self.process_queue()
@@ -840,6 +979,7 @@ class MainWindow(QMainWindow):
 
         self.active_tasks_count -= 1
         self.lbl_footer_status.setText(f"'{task['title']}' 다운로드 중 오류가 발생했습니다: {err_msg}")
+        self.update_stats()
         
         # 큐 재처리
         self.process_queue()
@@ -857,6 +997,7 @@ class MainWindow(QMainWindow):
             task['status'] = "실패"
             task['card'].set_error("취소됨")
             self.lbl_footer_status.setText("대기 중이던 작업을 취소했습니다.")
+            self.update_stats()
             self.process_queue()
         elif task['status'] == "다운로드 중":
             if task['worker']:
@@ -882,9 +1023,10 @@ class MainWindow(QMainWindow):
 
         self.update_list_count()
         self.lbl_footer_status.setText("목록에서 작업을 삭제했습니다.")
+        self.update_stats()
 
     def update_list_count(self):
-        self.lbl_list_count.setText(f"작업 목록 ({len(self.tasks)})")
+        self.lbl_list_count.setText(f"📥 작업 목록 ({len(self.tasks)})")
 
     def on_clear_completed_clicked(self):
         # 완료되었거나 실패/취소된 목록을 수집하여 삭제
